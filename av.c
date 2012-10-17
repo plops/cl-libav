@@ -23,6 +23,11 @@ Vid*vid_alloc()
   return (Vid*)malloc(sizeof(Vid));
 }
 
+int vid_get_width(Vid*v){ return v->avctx->width;}
+int vid_get_height(Vid*v){ return v->avctx->height;}
+uint8_t* vid_get_data(Vid*v,int i){ return v->pict.data[i];}
+int vid_get_linesize(Vid*v,int i){return v->pict.linesize[i];}
+
 void vid_init(Vid*v,const char*fn)
 {
   avcodec_register_all();
