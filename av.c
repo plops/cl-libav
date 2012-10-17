@@ -61,6 +61,22 @@ void vid_close(Vid*v)
   avformat_close_input(&(v->ic));
 }
 
+int vid_decode_frame(Vid*v)
+{
+  int finished=-1;
+  while(finished<=0){
+    if(av_read_frame(v->ic,&(v->pkt))<0)
+      return 0;
+    if(v->pkt.stream_index == v->vstream)
+      avcodec_decode_video2(v->avctx,v->frame,&finished,&(v->pkt));
+    if(finished>0)
+      sws_scale(v->sc, (const uint8_t **) v->frame->data, v->frame->linesize,
+		0, v->frame->height, v->pict.data, v->pict.linesize);
+    av_free_packet(&(v->pkt));
+  }
+  return 1;
+}
+
 int main()
 {
   
@@ -68,19 +84,10 @@ int main()
     "/home/martin/Downloads2/XDC2012_-_OpenGL_Future-LesAb4sTXgA.flv";
   Vid*v=vid_alloc();
   vid_init(v,fn);
-  
-  int eof=0;
-  
-  while(!eof){
-    eof=av_read_frame(v->ic,&(v->pkt))<0?1:0;
-    int finished=-1;
-    if(v->pkt.stream_index == v->vstream)
-      avcodec_decode_video2(v->avctx,v->frame,&finished,&(v->pkt));
-    if(finished>0){
-      sws_scale(v->sc, (const uint8_t **) v->frame->data, v->frame->linesize,
-		0, v->frame->height, v->pict.data, v->pict.linesize);
-    }
-    av_free_packet(&(v->pkt));
+    
+  while(vid_decode_frame(v)){
+    static int i=0;
+    printf("%d\n",i++);
   }
 
   vid_close(v);
