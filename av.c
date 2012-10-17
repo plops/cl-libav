@@ -1,76 +1,89 @@
 #include "/usr/local/include/libavformat/avformat.h"
 #include "/usr/local/include/libavcodec/avcodec.h"
 #include "/usr/local/include/libswscale/swscale.h"
+#include <stdlib.h>
 
-int main()
+
+typedef struct Vid Vid;
+struct Vid {
+  AVFormatContext *ic;
+  int vstream;
+  AVCodecContext *avctx;
+  AVCodec *codec;
+  AVFrame *frame;
+  AVPacket pkt;
+  int fmt;
+  struct SwsContext *sc;
+  int sws_flags;
+  AVPicture pict;
+};
+
+Vid*vid_alloc()
+{
+  return (Vid*)malloc(sizeof(Vid));
+}
+
+void vid_init(Vid*v,const char*fn)
 {
   avcodec_register_all();
   av_register_all();
 
-  AVFormatContext *ic;
+  avformat_open_input(&(v->ic),fn,NULL,NULL);
+  avformat_find_stream_info(v->ic,NULL);
+
+  v->vstream=av_find_best_stream(v->ic,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
+  v->avctx=v->ic->streams[v->vstream]->codec;
+  v->codec = avcodec_find_decoder(v->avctx->codec_id);
+  avcodec_open2(v->avctx,v->codec,NULL);
+
+  v->frame=avcodec_alloc_frame();
+    
+  int w=v->avctx->width,h=v->avctx->height;
+  v->fmt=PIX_FMT_RGB32; 
+  v->sws_flags = SWS_BILINEAR;
+  
+  v->sc = sws_getCachedContext(0,
+			    w,h,v->avctx->pix_fmt,
+			    w,h,v->fmt,
+			    v->sws_flags, NULL, NULL, NULL);
+  avpicture_alloc(&(v->pict),v->fmt,w,h);
+}
+
+
+void vid_close(Vid*v)
+{
+  sws_freeContext(v->sc);
+  av_free(v->frame);
+  avpicture_free(&(v->pict));
+  v->ic->streams[v->vstream]->discard = AVDISCARD_ALL;
+  avcodec_close(v->avctx);
+
+  avformat_close_input(&(v->ic));
+}
+
+int main()
+{
+  
   const char *fn=
     "/home/martin/Downloads2/XDC2012_-_OpenGL_Future-LesAb4sTXgA.flv";
+  Vid*v=vid_alloc();
+  vid_init(v,fn);
   
-  avformat_open_input(&ic,fn,NULL,NULL);
-
-  avformat_find_stream_info(ic,NULL);
-
-  int vstream=av_find_best_stream(ic,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
-
-  //av_dump_format(ic,0,fn,0);
-  
-  AVCodecContext *avctx=ic->streams[vstream]->codec;
-  AVCodec *codec = avcodec_find_decoder(avctx->codec_id);
-  //  avctx->flags |= CODEC_FLAG_TRUNCATED;
-  // avctx->flags2 |= CODEC_FLAG2_FAST;
-  
-  avcodec_open2(avctx,codec,NULL);
-
-  AVFrame *frame=avcodec_alloc_frame();
-  AVPacket pkt;
   int eof=0;
-
-
-  int w=avctx->width,h=avctx->height,fmt=PIX_FMT_RGB32; 
-  struct SwsContext *sc;
-  static int sws_flags = SWS_BILINEAR;
-
-  sc = sws_getCachedContext(0,
-			    w,h,avctx->pix_fmt,
-			    w,h,fmt,
-			    sws_flags, NULL, NULL, NULL);
-
-  AVPicture pict;
-  avpicture_alloc(&pict,fmt,w,h);
   
   while(!eof){
-    eof=av_read_frame(ic,&pkt)<0?1:0;
+    eof=av_read_frame(v->ic,&(v->pkt))<0?1:0;
     int finished=-1;
-    if(pkt.stream_index == vstream)
-      avcodec_decode_video2(avctx,frame,&finished,&pkt);
+    if(v->pkt.stream_index == v->vstream)
+      avcodec_decode_video2(v->avctx,v->frame,&finished,&(v->pkt));
     if(finished>0){
-      printf("%08ld %dx%d %d %d %d\n",
-	     frame->pkt_pts,
-	     frame->width,frame->height,
-	     frame->linesize[0],
-	     frame->linesize[1],
-	     frame->linesize[2]);
-      
-      sws_scale(sc, (const uint8_t **) frame->data, frame->linesize,
-		0, frame->height, pict.data, pict.linesize);
+      sws_scale(v->sc, (const uint8_t **) v->frame->data, v->frame->linesize,
+		0, v->frame->height, v->pict.data, v->pict.linesize);
     }
-    av_free_packet(&pkt);
+    av_free_packet(&(v->pkt));
   }
 
-  sws_freeContext(sc);
-  av_free(frame);
-  avpicture_free(&pict);
-  ic->streams[vstream]->discard = AVDISCARD_ALL;
-  avcodec_close(avctx);
-
-  avformat_close_input(&ic);
-  
-
+  vid_close(v);
 
   return 0;
 }
