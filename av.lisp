@@ -32,14 +32,18 @@
 
 
 (defvar *h* nil)
+(defvar *h2* nil)
 
 #+nil
 (progn
   (defparameter *h* (vid-alloc))
   (vid-init *h*  "/home/martin/Downloads2/XDC2012_-_OpenGL_Future-LesAb4sTXgA.flv")
-  (vid-decode-frame *h*)
-  (vid-get-data *h* 0)
-  (vid-get-width *h*))
+  (vid-decode-frame *h*))
+#+nil
+(progn
+  (defparameter *h2* (vid-alloc))
+  (vid-init *h2* "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4" )
+  (vid-decode-frame *h2*))
 
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
 
@@ -85,44 +89,66 @@
      
       (let* ((ww 640)
 	     (hh 480)
-	     (objs (make-array 1 :element-type '(unsigned-byte 32))))
+	     (objs (make-array 2 :element-type '(unsigned-byte 32))))
 	
 	(sleep (/ 60))
 	(gl:gen-textures (length objs) objs)
-	(gl:bind-texture gl:+texture-2d+ (aref objs 0))
-	;;(gl:pixel-store-i gl:+unpack-alignment+ 1)
-	(gl:tex-parameter-i gl:+texture-2d+ 
-			    gl:+texture-min-filter+ gl:+linear+)
-	(gl:tex-parameter-i gl:+texture-2d+ 
-			    gl:+texture-mag-filter+ gl:+linear+)
+	(dotimes (i  (length objs)) 
+	 (gl:bind-texture gl:+texture-2d+ (aref objs i))
+	 ;;(gl:pixel-store-i gl:+unpack-alignment+ 1)
+	 (gl:tex-parameter-i gl:+texture-2d+ 
+			     gl:+texture-min-filter+ gl:+linear+)
+	 (gl:tex-parameter-i gl:+texture-2d+ 
+			     gl:+texture-mag-filter+ gl:+linear+)
+	 )
 	(gl:enable gl:+texture-2d+)
-	
 		
 	(gl:matrix-mode gl:+modelview+)
-
-	(when *h*
-	 (vid-decode-frame *h*)
-	 (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
-			  (vid-get-width *h*)
-			  (vid-get-height *h*) 0
-			  gl:+rgba+ gl:+unsigned-byte+
-			  (vid-get-data *h* 0)))
 	
-	(let ((a (gl:get-error)))
-	  (unless (= a 0)
-	    (format t "get-error: ~a~%" a)))
+	(let ((h *h*)
+	      (i 0))
+	  (when h
+	    (gl:bind-texture gl:+texture-2d+ (aref objs i))
+	    (vid-decode-frame h)
+	    (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
+			     (vid-get-width h)
+			     (vid-get-height h) 0
+			     gl:+rgba+ gl:+unsigned-byte+
+			     (vid-get-data h 0))
+	    (gl:with-begin gl:+quads+
+	      (labels ((c (a b)
+			 (gl:tex-coord-2f (/ a ww)  (/ b hh))
+			 (gl:vertex-2f a b)))
+		(c 0 0)
+		(c 0 hh)
+		(c ww hh)
+		(c ww 0)))))
+
+	(let ((h *h2*)
+	      (i 1))
+	  (when h
+	    (gl:bind-texture gl:+texture-2d+ (aref objs i))
+	    (vid-decode-frame h)
+	    (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
+			     (vid-get-width h)
+			     (vid-get-height h) 0
+			     gl:+rgba+ gl:+unsigned-byte+
+			     (vid-get-data h 0))
+	    (gl:translate-f 300 100 0)
+	    (gl:with-begin gl:+quads+
+	      (labels ((c (a b)
+			 (gl:tex-coord-2f (/ a ww)  (/ b hh))
+			 (gl:vertex-2f a b)))
+		(c 0 0)
+		(c 0 hh)
+		(c ww hh)
+		(c ww 0)))))
+	
 	
 
-	(gl:with-begin gl:+quads+
-	  (labels ((c (a b)
-		     (gl:tex-coord-2f (/ a ww)  (/ b hh))
-		     (gl:vertex-2f a b)))
-	    (c 0 0)
-	    (c 0 hh)
-	    (c ww hh)
-	    (c ww 0)))
+	
 	(gl:disable gl:+texture-2d+)
-	(gl:delete-textures 1 objs)))))
+	(gl:delete-textures (length objs) objs)))))
 
 
 #+nil
