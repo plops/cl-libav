@@ -11,10 +11,10 @@
 (in-package :v)
 
 (cffi:load-foreign-library "./libav.so")
-
+(cffi:defcfun "vid_libinit" :void)
 (cffi:defcfun "vid_alloc" :uint64)
 (cffi:defcfun "vid_init"
-    :void 
+    :int
   (handle :uint64)
   (filename :string))
 
@@ -41,10 +41,18 @@
   (vid-get-data *h* 0)
   (vid-get-width *h*))
 
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
+
+#+nil
+(vid-libinit)
 #+nil
 (defparameter *h* (vid-alloc))
 #+nil
 (vid-init *h*  "/home/martin/Downloads2/XDC2012_-_OpenGL_Future-LesAb4sTXgA.flv")
+#+nil
+(defparameter *h2* (vid-alloc))
+#+nil
+(vid-init *h2* "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4")
 #+nil
 (vid-close *h*)
 
@@ -91,13 +99,14 @@
 	
 		
 	(gl:matrix-mode gl:+modelview+)
-	(dotimes (i 20)
-	 (vid-decode-frame *h*))
-	(gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
-			 (vid-get-width *h*)
-			 (vid-get-height *h*) 0
-			 gl:+rgba+ gl:+unsigned-byte+
-			 (vid-get-data *h* 0))
+
+	(when *h*
+	 (vid-decode-frame *h*)
+	 (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
+			  (vid-get-width *h*)
+			  (vid-get-height *h*) 0
+			  gl:+rgba+ gl:+unsigned-byte+
+			  (vid-get-data *h* 0)))
 	
 	(let ((a (gl:get-error)))
 	  (unless (= a 0)

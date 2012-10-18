@@ -1,5 +1,5 @@
-CFLAGS=-I/usr/local/include -Wextra -Wall -ggdb -O2
-LDFLAGS=-L/usr/local/lib -lavformat -lavcodec -lswscale
+CFLAGS=-I/usr/local/include -Wextra -Wall -ggdb -O2 -D_REENTRANT
+LDFLAGS=-L/usr/local/lib -lavformat -lavcodec -lswscale -lpthread
 all: libav.so av
 av: av.c
 libav.so: av.c

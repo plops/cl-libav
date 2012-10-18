@@ -2,7 +2,7 @@
 #include "/usr/local/include/libavcodec/avcodec.h"
 #include "/usr/local/include/libswscale/swscale.h"
 #include <stdlib.h>
-
+#include <pthread.h>
 
 typedef struct Vid Vid;
 struct Vid {
@@ -28,13 +28,48 @@ int vid_get_height(Vid*v){ return v->avctx->height;}
 uint8_t* vid_get_data(Vid*v,int i){ return v->pict.data[i];}
 int vid_get_linesize(Vid*v,int i){return v->pict.linesize[i];}
 
-void vid_init(Vid*v,const char*fn)
+static int lockmgr(void**mutex,enum AVLockOp op)
 {
+  pthread_mutex_t **m = (pthread_mutex_t**) mutex;
+  switch(op){
+  case AV_LOCK_CREATE:
+    *m = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(*m,NULL);
+    break;
+  case AV_LOCK_OBTAIN:
+    pthread_mutex_lock(*m);
+    break;
+  case AV_LOCK_RELEASE:
+    pthread_mutex_unlock(*m);
+    break;
+  case AV_LOCK_DESTROY:
+    pthread_mutex_destroy(*m);
+    free(*m);
+    break;
+  }
+  return 0;
+}
+
+void vid_libinit()
+{
+  static pthread_mutex_t m=PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_lock(&m);
+  av_lockmgr_register(lockmgr);
   avcodec_register_all();
   av_register_all();
+  av_log_set_level(AV_LOG_QUIET);
+  pthread_mutex_unlock(&m);
+}
 
-  avformat_open_input(&(v->ic),fn,NULL,NULL);
-  avformat_find_stream_info(v->ic,NULL);
+int vid_init(Vid*v,const char*fn)
+{
+  static pthread_mutex_t m=PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_lock(&m);
+
+  if(avformat_open_input(&(v->ic),fn,NULL,NULL)<0)
+    return -1;
+  if(avformat_find_stream_info(v->ic,NULL)<0)
+    return -2;
 
   v->vstream=av_find_best_stream(v->ic,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
   v->avctx=v->ic->streams[v->vstream]->codec;
@@ -52,11 +87,16 @@ void vid_init(Vid*v,const char*fn)
 			    w,h,v->fmt,
 			    v->sws_flags, NULL, NULL, NULL);
   avpicture_alloc(&(v->pict),v->fmt,w,h);
+  pthread_mutex_unlock(&m);
+  return 0;
 }
 
 
 void vid_close(Vid*v)
 {
+  static pthread_mutex_t m=PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_lock(&m);
+
   sws_freeContext(v->sc);
   av_free(v->frame);
   avpicture_free(&(v->pict));
@@ -64,10 +104,14 @@ void vid_close(Vid*v)
   avcodec_close(v->avctx);
 
   avformat_close_input(&(v->ic));
+  pthread_mutex_unlock(&m);
 }
 
 int vid_decode_frame(Vid*v)
 {
+  static pthread_mutex_t m=PTHREAD_MUTEX_INITIALIZER;
+  pthread_mutex_lock(&m);
+  
   int finished=-1;
   while(finished<=0){
     if(av_read_frame(v->ic,&(v->pkt))<0)
@@ -79,6 +123,7 @@ int vid_decode_frame(Vid*v)
 		0, v->frame->height, v->pict.data, v->pict.linesize);
     av_free_packet(&(v->pkt));
   }
+  pthread_mutex_unlock(&m);
   return 1;
 }
 
@@ -87,8 +132,14 @@ int main()
   
   const char *fn=
     "/home/martin/Downloads2/XDC2012_-_OpenGL_Future-LesAb4sTXgA.flv";
+
+  
+  
+  vid_libinit();
   Vid*v=vid_alloc();
   vid_init(v,fn);
+  Vid*v2=vid_alloc();
+  //vid_init(v2,"/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4");
     
   while(vid_decode_frame(v)){
     static int i=0;
