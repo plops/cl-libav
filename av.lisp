@@ -16,7 +16,9 @@
 (cffi:defcfun "vid_init"
     :int
   (handle :uint64)
-  (filename :string))
+  (filename :string)
+  (w :int)
+  (h :int))
 
 (cffi:defcfun "vid_decode_frame" 
     :int
@@ -24,6 +26,8 @@
 
 (cffi:defcfun "vid_get_width" :int (handle :uint64))
 (cffi:defcfun "vid_get_height" :int (handle :uint64))
+(cffi:defcfun "vid_get_out_width" :int (handle :uint64))
+(cffi:defcfun "vid_get_out_height" :int (handle :uint64))
 (cffi:defcfun "vid_get_data" (:pointer :uint8) (handle :uint64) (i :int))
 (cffi:defcfun "vid_get_linesize" :int (handle :uint64) (i :int))
 
@@ -34,21 +38,27 @@
 (defvar *h* nil)
 (defvar *h2* nil)
 
-#+nil
-(progn
-  (defparameter *h* (vid-alloc))
-  (vid-init *h*  "/home/martin/Downloads2/XDC2012_-_OpenGL_Future-LesAb4sTXgA.flv")
-  (vid-decode-frame *h*))
-#+nil
-(progn
-  (defparameter *h2* (vid-alloc))
-  (vid-init *h2* "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4" )
-  (vid-decode-frame *h2*))
-
-(declaim (optimize (speed 0) (safety 3) (debug 3)))
 
 #+nil
 (vid-libinit)
+#+nil
+(progn
+  (defparameter *h* (vid-alloc))
+  (vid-init *h*  "/home/martin/Downloads2/XDC2012_-_OpenGL_Future-LesAb4sTXgA.flv"
+	    128 128)
+  (vid-decode-frame *h*))
+#+nil
+(vid-get-out-width *h*)
+#+nil
+(vid-close *h*)
+
+#+nil
+(progn
+  (defparameter *h2* (vid-alloc))
+  (vid-init *h2* "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4" 640 480)
+  (vid-decode-frame *h2*))
+
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
 #+nil
 (defparameter *h* (vid-alloc))
 #+nil
@@ -57,8 +67,6 @@
 (defparameter *h2* (vid-alloc))
 #+nil
 (vid-init *h2* "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4")
-#+nil
-(vid-close *h*)
 
 #+Nil
 (vid-get-data *h* 0)
@@ -111,8 +119,8 @@
 	    (gl:bind-texture gl:+texture-2d+ (aref objs i))
 	    (vid-decode-frame h)
 	    (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
-			     (vid-get-width h)
-			     (vid-get-height h) 0
+			     (vid-get-out-width h)
+			     (vid-get-out-height h) 0
 			     gl:+rgba+ gl:+unsigned-byte+
 			     (vid-get-data h 0))
 	    (gl:with-begin gl:+quads+
@@ -124,14 +132,15 @@
 		(c ww hh)
 		(c ww 0)))))
 
+	#+nil
 	(let ((h *h2*)
 	      (i 1))
 	  (when h
 	    (gl:bind-texture gl:+texture-2d+ (aref objs i))
 	    (vid-decode-frame h)
 	    (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
-			     (vid-get-width h)
-			     (vid-get-height h) 0
+			     (vid-get-out-width h)
+			     (vid-get-out-height h) 0
 			     gl:+rgba+ gl:+unsigned-byte+
 			     (vid-get-data h 0))
 	    (gl:translate-f 300 100 0)

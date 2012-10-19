@@ -16,6 +16,7 @@ struct Vid {
   struct SwsContext *sc;
   int sws_flags;
   AVPicture pict;
+  int ow, oh;
 };
 
 Vid*vid_alloc()
@@ -25,6 +26,8 @@ Vid*vid_alloc()
 
 int vid_get_width(Vid*v){ return v->avctx->width;}
 int vid_get_height(Vid*v){ return v->avctx->height;}
+int vid_get_out_width(Vid*v){ return v->ow;}
+int vid_get_out_height(Vid*v){ return v->oh;}
 uint8_t* vid_get_data(Vid*v,int i){ return v->pict.data[i];}
 int vid_get_linesize(Vid*v,int i){return v->pict.linesize[i];}
 
@@ -61,7 +64,7 @@ void vid_libinit()
   pthread_mutex_unlock(&m);
 }
 
-int vid_init(Vid*v,const char*fn)
+int vid_init(Vid*v,const char*fn,int ow,int oh)
 {
   static pthread_mutex_t m=PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_lock(&m);
@@ -84,11 +87,18 @@ int vid_init(Vid*v,const char*fn)
   v->fmt=PIX_FMT_RGB32; 
   v->sws_flags = SWS_BILINEAR;
   
-  v->sc = sws_getCachedContext(0,
-			    w,h,v->avctx->pix_fmt,
-			    w,h,v->fmt,
-			    v->sws_flags, NULL, NULL, NULL);
-  avpicture_alloc(&(v->pict),v->fmt,w,h);
+  v->ow=ow;
+  v->oh=oh;
+  if(v->ow==0 || v->oh==0){
+    v->ow=w;
+    v->oh=h;
+  }
+    
+  v->sc = sws_getCachedContext(0, 
+			       w,h,v->avctx->pix_fmt,
+			       v->ow,v->oh,v->fmt,
+			       v->sws_flags, NULL, NULL, NULL);
+  avpicture_alloc(&(v->pict),v->fmt,v->ow,v->oh);
   pthread_mutex_unlock(&m);
   return 0;
 }
@@ -139,10 +149,10 @@ int main()
   
   vid_libinit();
   Vid*v=vid_alloc();
-  vid_init(v,fn);
+  vid_init(v,fn,128,128);
   Vid*v2=vid_alloc();
 
-  vid_init(v2,"/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4");
+  vid_init(v2,"/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4",128,128);
 	 
   while(vid_decode_frame(v)){
     static int i=0;
@@ -150,6 +160,7 @@ int main()
   }
 
   vid_close(v);
+  vid_close(v2);
 
   return 0;
 }
