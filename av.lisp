@@ -38,9 +38,31 @@
 (defvar *h* nil)
 (defvar *h2* nil)
 
+#+nil
+(defparameter *vids*
+  (mapcar #'first
+	  (sort 
+	   (mapcar #'(lambda (x)
+		       (list x
+			     (with-open-file (s x)
+			       (file-length s))))
+		   (directory 
+		    (merge-pathnames #p"*.flv" "/home/martin/Downloads2/")))
+	   #'>
+	   :key #'second)))
+
 
 #+nil
 (vid-libinit)
+#+nil
+(defparameter *h*
+ (loop for e in (subseq *vids* 0 16) collect
+      (let ((h (vid-alloc)))
+	(vid-init h (format nil "~a" e) 128 128)
+	(vid-decode-frame h)
+	h)))
+
+
 #+nil
 (progn
   (defparameter *h* (vid-alloc))
@@ -51,12 +73,22 @@
 (vid-get-out-width *h*)
 #+nil
 (vid-close *h*)
-
+#+nil
+(dotimes (i 10000)
+ (vid-decode-frame *h*))
+#+nil
+(loop for i from 0 do
+     (format t "~d~%" i)
+   while
+     (= 1 (vid-decode-frame *h2*)))
+#+nil
+(vid-decode-frame *h2*)
 #+nil
 (progn
   (defparameter *h2* (vid-alloc))
-  (vid-init *h2* "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4" 640 480)
+  (vid-init *h2* "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4" 128 128)
   (vid-decode-frame *h2*))
+
 
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
 #+nil
@@ -81,12 +113,12 @@
       (gl:matrix-mode gl:+projection+)
       (gl:load-identity)
 ;      (glu:perspective 65 (/ w h) 1 100)
-      (gl:ortho 0 640 480 0 .01 10)
+      (gl:ortho 0 512 512 0 .01 10)
       (gl:matrix-mode gl:+modelview+)
       (gl:load-identity)
-#+nil      (glu:look-at 0 1 10 ;; camera
-		   0 0 0   ;; target
-		   0 0 1))
+      #+nil      (glu:look-at 0 1 10 ;; camera
+			      0 0 0   ;; target
+			      0 0 1))
     (gl:translate-f 0 0 -1)
     (gl:rotate-f 0 0 0 1)
     (if (< rot 360)
@@ -95,66 +127,44 @@
     (gl:with-push-matrix
       ;(gl:rotate-f rot 0 0 1)
      
-      (let* ((ww 640)
-	     (hh 480)
-	     (objs (make-array 2 :element-type '(unsigned-byte 32))))
-	
+      (let* ((objs (make-array (length *h*) :element-type '(unsigned-byte 32))))
 	(sleep (/ 60))
 	(gl:gen-textures (length objs) objs)
 	(dotimes (i  (length objs)) 
-	 (gl:bind-texture gl:+texture-2d+ (aref objs i))
-	 ;;(gl:pixel-store-i gl:+unpack-alignment+ 1)
-	 (gl:tex-parameter-i gl:+texture-2d+ 
-			     gl:+texture-min-filter+ gl:+linear+)
-	 (gl:tex-parameter-i gl:+texture-2d+ 
-			     gl:+texture-mag-filter+ gl:+linear+)
-	 )
+	  (gl:bind-texture gl:+texture-2d+ (aref objs i))
+	  ;;(gl:pixel-store-i gl:+unpack-alignment+ 1)
+	  (gl:tex-parameter-i gl:+texture-2d+ 
+			      gl:+texture-min-filter+ gl:+linear+)
+	  (gl:tex-parameter-i gl:+texture-2d+ 
+			      gl:+texture-mag-filter+ gl:+linear+))
 	(gl:enable gl:+texture-2d+)
-		
 	(gl:matrix-mode gl:+modelview+)
 	
-	(let ((h *h*)
-	      (i 0))
-	  (when h
-	    (gl:bind-texture gl:+texture-2d+ (aref objs i))
-	    (vid-decode-frame h)
-	    (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
-			     (vid-get-out-width h)
-			     (vid-get-out-height h) 0
-			     gl:+rgba+ gl:+unsigned-byte+
-			     (vid-get-data h 0))
-	    (gl:with-begin gl:+quads+
-	      (labels ((c (a b)
-			 (gl:tex-coord-2f (/ a ww)  (/ b hh))
-			 (gl:vertex-2f a b)))
-		(c 0 0)
-		(c 0 hh)
-		(c ww hh)
-		(c ww 0)))))
-
-	#+nil
-	(let ((h *h2*)
-	      (i 1))
-	  (when h
-	    (gl:bind-texture gl:+texture-2d+ (aref objs i))
-	    (vid-decode-frame h)
-	    (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
-			     (vid-get-out-width h)
-			     (vid-get-out-height h) 0
-			     gl:+rgba+ gl:+unsigned-byte+
-			     (vid-get-data h 0))
-	    (gl:translate-f 300 100 0)
-	    (gl:with-begin gl:+quads+
-	      (labels ((c (a b)
-			 (gl:tex-coord-2f (/ a ww)  (/ b hh))
-			 (gl:vertex-2f a b)))
-		(c 0 0)
-		(c 0 hh)
-		(c ww hh)
-		(c ww 0)))))
-	
-	
-
+	(loop for i from 0 and h in *h* do
+	     (let ((ww 128)
+		   (hh 128))
+	       (when h
+		 (gl:bind-texture gl:+texture-2d+ (aref objs i))
+		 (when (= 0 (vid-decode-frame h))
+		   (vid-close h)
+		   (setf h nil))
+		 (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
+				  (vid-get-out-width h)
+				  (vid-get-out-height h) 0
+				  gl:+rgba+ gl:+unsigned-byte+
+				  (vid-get-data h 0)))
+	       (gl:with-push-matrix 
+		   (let ((ii (mod i 4))
+			 (jj (floor i 4)))
+		     (gl:translate-f (* jj ww) (* ii hh) 0))
+		   (gl:with-begin gl:+quads+
+		     (labels ((c (a b)
+				(gl:tex-coord-2f (/ a ww)  (/ b hh))
+				(gl:vertex-2f a b)))
+		       (c 0 0)
+		       (c 0 hh)
+		       (c ww hh)
+		       (c ww 0))))))
 	
 	(gl:disable gl:+texture-2d+)
 	(gl:delete-textures (length objs) objs)))))
