@@ -42,13 +42,14 @@
 
 (defparameter *vids*
   (mapcar #'first
-	  (sort 
-	   (mapcar #'(lambda (x)
-		       (list x
+	  (mapcar #'(lambda (x)
+	    (list x
 			     (with-open-file (s x)
 			       (file-length s))))
 		   (directory 
 		    (merge-pathnames #p"*/*.*" "/dev/shm/")))
+	  #+nil(sort 
+	   
 	   #'>
 	   :key #'second)))
 
@@ -59,7 +60,7 @@
  (defparameter *h*
    (loop for e in (subseq *vids* 0 9) collect
 	(let ((h (vid-alloc)))
-	
+	  (format t "~a~%" e)
 	  (vid-init h (format nil "~a" e) 128 128)
 	  (vid-decode-frame h)
 	  (format t "~a~%" (list e (vid-get-width h) (vid-get-height h)))
@@ -145,12 +146,16 @@
 	   (vid-close (elt *h* i))))
       (progn
 	(defparameter *h*
-	  (loop for e in (subseq *vids* 0 (min (* 11 6) 2 (1- (length *vids*)))) collect
+	  (loop for e in (subseq *vids* 0 (min (* 11 6) (1- (length *vids*)))) collect
 	       (let ((h (vid-alloc)))
-		 
-		 (vid-init h (format nil "~a" e) 128 128)
+		 (format t "~a~%" (list e))
+		 (let ((r (vid-init h (format nil "~a" e) 128 128)))
+		   (loop while (< r 0)
+		      do
+			(setf r (vid-init h (format nil "~a" (elt *vids* (random (length *vids*))))
+					  128 128))))
 		 (vid-decode-frame h)
-		 (format t "~a~%" (list e (vid-get-width h) (vid-get-height h)))
+		 (format t "~a~%" (list (vid-get-width h) (vid-get-height h)))
 		 h)))
 	(format t "finished~%"))
       #+nil
@@ -200,17 +205,21 @@
 	     (when h
 	       (let ((ww 128)
 		     (hh 128))
-		 (dotimes (i 30)
-		  (when (= 0 (vid-decode-frame h))
-		    (format t "closing video ~a~%" h)
-		    (vid-close h)
-		    (let ((hnew (vid-alloc))
-			  (fn (format nil "~a" (elt *vids* i #+nil (random (length *vids*))))))
-		      (format t "openingb ~a~%" fn)
-		      (vid-init hnew fn 128 128)
-		      (vid-decode-frame hnew)
-		      (setf (elt *h* i) hnew)
-		      (setf h hnew))))
+		 (when (= 0 (vid-decode-frame h))
+		   (format t "closing video ~a~%" h)
+		   (vid-close h)
+		   (let ((hnew (vid-alloc))
+			 (fn (format nil "~a" (elt *vids* (random (length *vids*))))))
+		     (format t "openingb ~a~%" fn)
+		     (let ((r (vid-init hnew fn 128 128)))
+		       (loop while (< r 0)
+			  do
+			    (setf r (vid-init hnew
+					      (format nil "~a" (elt *vids* (random (length *vids*))))
+					      128 128))))
+		     (vid-decode-frame hnew)
+		     (setf (elt *h* i) hnew)
+		     (setf h hnew)))
 		 (progn
 		   (gl:bind-texture gl:+texture-2d+ (aref objs i))
 		   

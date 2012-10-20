@@ -73,17 +73,25 @@ int vid_init(Vid*v,const char*fn,int ow,int oh)
   static pthread_mutex_t m=PTHREAD_MUTEX_INITIALIZER;
   pthread_mutex_lock(&m);
   v->ic=NULL;
-  if(avformat_open_input(&(v->ic),fn,NULL,NULL)<0)
+  if(avformat_open_input(&(v->ic),fn,NULL,NULL)<0){
+    pthread_mutex_unlock(&m);
     return -1;
-  if(avformat_find_stream_info(v->ic,NULL)<0)
+  }
+  if(avformat_find_stream_info(v->ic,NULL)<0){
+    pthread_mutex_unlock(&m);
     return -2;
+  }
   v->vstream=av_find_best_stream(v->ic,AVMEDIA_TYPE_VIDEO,-1,-1,NULL,0);
-  if(v->vstream<0)
+  if(v->vstream<0){
+    pthread_mutex_unlock(&m);
     return -3;
+  }
   v->avctx=v->ic->streams[v->vstream]->codec;
   v->codec = avcodec_find_decoder(v->avctx->codec_id);
-  if(v->codec==0)
+  if(v->codec==0){
+    pthread_mutex_unlock(&m);
     return -4;
+  }
   avcodec_open2(v->avctx,v->codec,NULL);
   v->frame=avcodec_alloc_frame();
     
@@ -159,7 +167,9 @@ int main()
   vid_init(v,fn,128,128);
   Vid*v2=vid_alloc();
 
-  vid_init(v2,"/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4",128,128);
+  printf("vid-init = %d\n",vid_init(v2,
+	   "/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4"
+				    ,128,128));
 	 
   while(vid_decode_frame(v2)){
     static int i=0;
