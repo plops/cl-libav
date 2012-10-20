@@ -13,6 +13,7 @@
 (cffi:load-foreign-library "./libav.so")
 (cffi:defcfun "vid_libinit" :void)
 (cffi:defcfun "vid_alloc" :uint64)
+(cffi:defcfun "vid_free" :void (handle :uint64))
 (cffi:defcfun "vid_init"
     :int
   (handle :uint64)
@@ -37,8 +38,8 @@
 
 (defvar *h* nil)
 (defvar *h2* nil)
+(defvar *vids* nil)
 
-#+nil
 (defparameter *vids*
   (mapcar #'first
 	  (sort 
@@ -47,21 +48,36 @@
 			     (with-open-file (s x)
 			       (file-length s))))
 		   (directory 
-		    (merge-pathnames #p"*.flv" "/home/martin/Downloads2/")))
+		    (merge-pathnames #p"*/*.*" "/dev/shm/")))
 	   #'>
 	   :key #'second)))
-
 
 #+nil
 (vid-libinit)
 #+nil
-(defparameter *h*
- (loop for e in (subseq *vids* 0 16) collect
-      (let ((h (vid-alloc)))
-	(vid-init h (format nil "~a" e) 128 128)
-	(vid-decode-frame h)
-	h)))
+(progn
+ (defparameter *h*
+   (loop for e in (subseq *vids* 0 9) collect
+	(let ((h (vid-alloc)))
+	
+	  (vid-init h (format nil "~a" e) 128 128)
+	  (vid-decode-frame h)
+	  (format t "~a~%" (list e (vid-get-width h) (vid-get-height h)))
+	  h)))
+ (format t "finished~%"))
+#+nil
+(loop for i below (length *h*) do
+     (vid-close (elt *h* i))
+     (let ((hnew (vid-alloc))
+	   (fn (format nil "~a" (elt *vids* (random (length *vids*))))))
+       (format t "openingj ~a~%" fn)
+       (vid-init hnew fn 128 128)
+       (setf (elt *h* i) hnew)))
 
+
+#+nil
+(dolist (h *h*)
+  (vid-close h))
 
 #+nil
 (progn
@@ -103,8 +119,49 @@
 #+Nil
 (vid-get-data *h* 0)
 
-(let ((rot 0))
+(let ((t1 0d0)
+      (t0 0d0)
+      (frames 0))
+ (defun count-fps ()
+   (setf t1 (glfw:get-time))
+   (when (or (< 1 (- t1 t0))
+             (= frames 0))
+     (glfw:set-window-title (format nil "bla ~,1f FPS"
+                                    (/ frames (- t1 t0))))
+     (setf frames 0
+           t0 t1))
+   (incf frames)))
+
+(let ((rot 0)
+      (start t))
+  
   (defun draw ()
+    (count-fps)
+    (when start
+      (setf start nil)
+      (vid-libinit)
+      (when *h*
+	(loop for i below (length *h*) do
+	   (vid-close (elt *h* i))))
+      (progn
+	(defparameter *h*
+	  (loop for e in (subseq *vids* 0 (min (* 11 6) 51 (1- (length *vids*)))) collect
+	       (let ((h (vid-alloc)))
+		 
+		 (vid-init h (format nil "~a" e) 128 128)
+		 (vid-decode-frame h)
+		 (format t "~a~%" (list e (vid-get-width h) (vid-get-height h)))
+		 h)))
+	(format t "finished~%"))
+      #+nil 
+      (loop for i below (length *h*) do
+	   (vid-close (elt *h* i))
+	   (let ((hnew (vid-alloc))
+		 (fn (format nil "~a" (elt *vids* (random (length *vids*))))))
+	     (format t "openingj ~a~%" fn)
+	     (vid-init hnew fn 128 128)
+	     (setf (elt *h* i) hnew)))
+      )
     (destructuring-bind (w h) (glfw:get-window-size)
       (setf h (max h 1))
       (gl:viewport 0 0 w h)
@@ -113,7 +170,7 @@
       (gl:matrix-mode gl:+projection+)
       (gl:load-identity)
 ;      (glu:perspective 65 (/ w h) 1 100)
-      (gl:ortho 0 512 512 0 .01 10)
+      (gl:ortho 0 (* 11 128) (* 6 128) 0 .01 10)
       (gl:matrix-mode gl:+modelview+)
       (gl:load-identity)
       #+nil      (glu:look-at 0 1 10 ;; camera
@@ -128,7 +185,7 @@
       ;(gl:rotate-f rot 0 0 1)
      
       (let* ((objs (make-array (length *h*) :element-type '(unsigned-byte 32))))
-	(sleep (/ 60))
+	;(sleep (/ .3 60))
 	(gl:gen-textures (length objs) objs)
 	(dotimes (i  (length objs)) 
 	  (gl:bind-texture gl:+texture-2d+ (aref objs i))
@@ -146,16 +203,25 @@
 	       (when h
 		 (gl:bind-texture gl:+texture-2d+ (aref objs i))
 		 (when (= 0 (vid-decode-frame h))
+		   (format t "closing video ~a~%" h)
 		   (vid-close h)
-		   (setf h nil))
-		 (gl:tex-image-2d gl:+texture-2d+ 0 gl:+rgba+
+		   (let ((hnew (vid-alloc))
+			 (fn (format nil "~a" (elt *vids* (random (length *vids*))))))
+		     (format t "openingb ~a~%" fn)
+		     (vid-init hnew fn 128 128)
+		     (vid-decode-frame hnew)
+		     (setf (elt *h* i) hnew)))
+		 (gl:tex-image-2d gl:+texture-2d+ 0 
+				  gl:+rgba+
 				  (vid-get-out-width h)
 				  (vid-get-out-height h) 0
-				  gl:+rgba+ gl:+unsigned-byte+
+				  #x80e1 ;; bgra 
+				  ;;gl:+rgba+ 
+				  gl:+unsigned-byte+
 				  (vid-get-data h 0)))
 	       (gl:with-push-matrix 
-		   (let ((ii (mod i 4))
-			 (jj (floor i 4)))
+		   (let ((ii (mod i 6))
+			 (jj (floor i 6)))
 		     (gl:translate-f (* jj ww) (* ii hh) 0))
 		   (gl:with-begin gl:+quads+
 		     (labels ((c (a b)
@@ -171,9 +237,10 @@
 
 
 #+nil
-(glfw:do-window (:title "bla" :width 512 :height 512)
+(glfw:do-window (:title "bla" :width (* 11 128) :height (* 6 128))
     ()
   (when (eql (glfw:get-key glfw:+key-esc+) glfw:+press+)
     (return-from glfw::do-open-window))
   (draw))
+
 

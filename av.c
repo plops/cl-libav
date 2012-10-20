@@ -23,6 +23,10 @@ Vid*vid_alloc()
 {
   return (Vid*)malloc(sizeof(Vid));
 }
+void vid_free(Vid*v)
+{
+  free(v);
+}
 
 int vid_get_width(Vid*v){ return v->avctx->width;}
 int vid_get_height(Vid*v){ return v->avctx->height;}
@@ -116,6 +120,7 @@ void vid_close(Vid*v)
   avcodec_close(v->avctx);
 
   avformat_close_input(&(v->ic));
+  vid_free(v);
   pthread_mutex_unlock(&m);
 }
 
