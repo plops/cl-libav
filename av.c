@@ -131,8 +131,10 @@ int vid_decode_frame(Vid*v)
   
   int finished=-1;
   while(finished<=0){
-    if(av_read_frame(v->ic,&(v->pkt))<0)
+    if(av_read_frame(v->ic,&(v->pkt))<0){
+      pthread_mutex_unlock(&m);
       return 0;
+    }
     if(v->pkt.stream_index == v->vstream)
       avcodec_decode_video2(v->avctx,v->frame,&finished,&(v->pkt));
     if(finished>0)
@@ -159,10 +161,19 @@ int main()
 
   vid_init(v2,"/home/martin/Downloads2/RC_helicopter_upside_down_head_touch-1Lg6wASg76o.mp4",128,128);
 	 
-  while(vid_decode_frame(v)){
+  while(vid_decode_frame(v2)){
     static int i=0;
     printf("%d\n",i++);
   }
+  vid_close(v2);
+  v2=vid_alloc();
+  vid_init(v2,fn,128,128);
+  while(vid_decode_frame(v2)){
+    static int i=0;
+    printf("%d\n",i++);
+  }
+
+
 
   vid_close(v);
   vid_close(v2);

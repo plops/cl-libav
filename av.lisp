@@ -145,7 +145,7 @@
 	   (vid-close (elt *h* i))))
       (progn
 	(defparameter *h*
-	  (loop for e in (subseq *vids* 0 (min (* 11 6) 9 (1- (length *vids*)))) collect
+	  (loop for e in (subseq *vids* 0 (min (* 11 6) 2 (1- (length *vids*)))) collect
 	       (let ((h (vid-alloc)))
 		 
 		 (vid-init h (format nil "~a" e) 128 128)
@@ -153,7 +153,7 @@
 		 (format t "~a~%" (list e (vid-get-width h) (vid-get-height h)))
 		 h)))
 	(format t "finished~%"))
-      #+nil 
+      #+nil
       (loop for i below (length *h*) do
 	   (vid-close (elt *h* i))
 	   (let ((hnew (vid-alloc))
@@ -166,7 +166,7 @@
       (setf h (max h 1))
       (gl:viewport 0 0 w h)
       (gl:clear-color .0 .2 .2 1)
-      ;(gl:clear (logior gl:+color-buffer-bit+ gl:+depth-buffer-bit+))
+      (gl:clear (logior gl:+color-buffer-bit+ gl:+depth-buffer-bit+))
       (gl:matrix-mode gl:+projection+)
       (gl:load-identity)
 ;      (glu:perspective 65 (/ w h) 1 100)
@@ -196,31 +196,24 @@
 			      gl:+texture-mag-filter+ gl:+linear+))
 	(gl:enable gl:+texture-2d+)
 	(gl:matrix-mode gl:+modelview+)
-	(let ((result (make-array (length *h*) :initial-element (sb-sys:int-sap 0))))
-	  (let ((ths
-		 (loop for i from 0 and h in *h* collect
-		      (sb-thread:make-thread
-		       #'(lambda ()
-			   (when (= 0 (vid-decode-frame h))
-			     (format t "closing video ~a~%" h)
-			     (vid-close h)
-			     (let ((hnew (vid-alloc))
-				   (fn (format nil "~a" (elt *vids* (random (length *vids*))))))
-			       (format t "openingb ~a~%" fn)
-			       (vid-init hnew fn 128 128)
-			       (vid-decode-frame hnew)
-			       (setf (elt *h* i) hnew)))
-			   (setf (elt result i) (vid-get-data h 0)))))))
-	    (loop for e in ths do
-		 (sb-thread:join-thread e)))
-	 
-	 (loop for i from 0 and e across result do
-	      (unless (sb-sys:sap= e (sb-sys:int-sap 0))
+	(loop for i from 0 and h in *h* do
+	     (when h
 	       (let ((ww 128)
 		     (hh 128))
+		 (dotimes (i 30)
+		  (when (= 0 (vid-decode-frame h))
+		    (format t "closing video ~a~%" h)
+		    (vid-close h)
+		    (let ((hnew (vid-alloc))
+			  (fn (format nil "~a" (elt *vids* i #+nil (random (length *vids*))))))
+		      (format t "openingb ~a~%" fn)
+		      (vid-init hnew fn 128 128)
+		      (vid-decode-frame hnew)
+		      (setf (elt *h* i) hnew)
+		      (setf h hnew))))
 		 (progn
 		   (gl:bind-texture gl:+texture-2d+ (aref objs i))
-		  
+		   
 		   (gl:tex-image-2d gl:+texture-2d+ 0 
 				    gl:+rgba+
 				    128
@@ -229,7 +222,7 @@
 				    #x80e1 ;; bgra 
 				    ;;gl:+rgba+ 
 				    gl:+unsigned-byte+
-				    e))
+				    (vid-get-data h 0)))
 		 (gl:with-push-matrix 
 		   (let ((ii (mod i 6))
 			 (jj (floor i 6)))
@@ -241,7 +234,7 @@
 		       (c 0 0)
 		       (c 0 hh)
 		       (c ww hh)
-		       (c ww 0))))))))
+		       (c ww 0)))))))
 	
 	(gl:disable gl:+texture-2d+)
 	(gl:delete-textures (length objs) objs)))))
